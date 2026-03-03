@@ -4,7 +4,15 @@ const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 // Sound control flag
 let soundsEnabled = true;
 
-const API_URL = 'http://127.0.0.1:5000';
+const API_URL = 'http://sloth-allowed-uniformly.ngrok-free.app';
+
+const apiFetch = (url, options = {}) => {
+  const headers = {
+    ...options.headers,
+    'ngrok-skip-browser-warning': 'true',
+  };
+  return fetch(url, { ...options, headers });
+};
 
 const playSound = (type) => {
   if (!soundsEnabled) return;
@@ -61,8 +69,8 @@ const BottomNav = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: 'home', label: 'Home', icon: '🏠' },
     { id: 'slots', label: 'Slots', icon: '🎰' },
-    { id: 'blackjack', label: 'BLACKJACK', icon: '🃏' },
-    { id: 'account', label: 'Profile', icon: '👤' },
+    { id: 'blackjack', label: 'Blackjack', icon: '🃏' },
+    { id: 'account', label: 'Account', icon: '👤' },
   ];
 
   return (
@@ -295,7 +303,7 @@ const LoginScreen = ({ setAuthView, onLogin }) => {
     formData.append('password', password);
 
     try {
-      const resp = await fetch(`${API_URL}/login`, { method: 'POST', body: formData });
+      const resp = await apiFetch(`${API_URL}/login`, { method: 'POST', body: formData });
       const data = await resp.text();
       if (resp.ok) {
         try {
@@ -363,7 +371,7 @@ const RegisterScreen = ({ setAuthView, onRegisterSuccess }) => {
     Object.keys(form).forEach(key => formData.append(key, form[key]));
 
     try {
-      const resp = await fetch(`${API_URL}/register`, { method: 'POST', body: formData });
+      const resp = await apiFetch(`${API_URL}/register`, { method: 'POST', body: formData });
       if (resp.ok) {
         const data = await resp.json();
         // Trigger QR setup screen directly
@@ -735,7 +743,7 @@ function App() {
     formData.append('amount', amount);
 
     try {
-      const resp = await fetch(`${API_URL}/deposit`, { method: 'POST', body: formData });
+      const resp = await apiFetch(`${API_URL}/deposit`, { method: 'POST', body: formData });
       if (resp.ok) {
         const data = await resp.json();
         setUser({ ...user, balance: data.new_balance });
@@ -753,7 +761,7 @@ function App() {
     formData.append('password_hash', user.password_hash);
 
     try {
-      const resp = await fetch(`${API_URL}/delete_account`, { method: 'POST', body: formData });
+      const resp = await apiFetch(`${API_URL}/delete_account`, { method: 'POST', body: formData });
       if (resp.ok) {
         setUser(null);
         setAuthView('login');
@@ -769,7 +777,7 @@ function App() {
     formData.append('password_hash', user.password_hash);
 
     try {
-      const resp = await fetch(`${API_URL}/claim_bonus`, { method: 'POST', body: formData });
+      const resp = await apiFetch(`${API_URL}/claim_bonus`, { method: 'POST', body: formData });
       if (resp.ok) {
         const data = await resp.json();
         setUser({ ...user, balance: data.new_balance });
@@ -795,7 +803,7 @@ function App() {
     formData.append(fieldKey, newValue);
 
     try {
-      const resp = await fetch(`${API_URL}${endpoint}`, { method: 'POST', body: formData });
+      const resp = await apiFetch(`${API_URL}${endpoint}`, { method: 'POST', body: formData });
       if (resp.ok) {
         const data = await resp.json();
         if (updateField === 'email') {
@@ -819,7 +827,7 @@ function App() {
     formData.append('totp_secret', registrationData.totp_secret);
 
     try {
-      const resp = await fetch(`${API_URL}/get_qr_code`, { method: 'POST', body: formData });
+      const resp = await apiFetch(`${API_URL}/get_qr_code`, { method: 'POST', body: formData });
       if (resp.ok) {
         const data = await resp.json();
         setQrData(data);
@@ -837,7 +845,7 @@ function App() {
     formData.append('otp_code', otpCode);
 
     try {
-      const resp = await fetch(`${API_URL}/verify_otp`, { method: 'POST', body: formData });
+      const resp = await apiFetch(`${API_URL}/verify_otp`, { method: 'POST', body: formData });
       if (resp.ok) {
         setQrData(null);
         // Navigate to success screen instead of login directly
@@ -862,7 +870,7 @@ function App() {
     formData.append('otp_code', otpCode);
 
     try {
-      const resp = await fetch(`${API_URL}/verify_otp`, { method: 'POST', body: formData });
+      const resp = await apiFetch(`${API_URL}/verify_otp`, { method: 'POST', body: formData });
       if (resp.ok) {
         const userData = await resp.json();
         setUser(userData);
