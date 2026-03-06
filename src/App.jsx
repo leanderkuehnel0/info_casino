@@ -141,74 +141,207 @@ const HomeScreen = ({ userData, setActiveTab, onClaimBonus }) => (
   </div>
 );
 
-const SlotsScreen = () => (
-  <div className="screen-content">
-    <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Slots</h2>
-    <div className="glass-card" style={{ height: '300px', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '2px solid var(--rose)', position: 'relative' }}>
-      <div style={{ display: 'flex', gap: '10px', fontSize: '50px' }}>
-        {['💎', '🍒', '7️⃣'].map((s, i) => (
-          <div key={i} className="glass-card" style={{ padding: '10px', width: '80px', height: '120px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>{s}</div>
-        ))}
-      </div>
-      <div style={{ position: 'absolute', bottom: '10px', width: '100%', textAlign: 'center', color: 'var(--foam)', fontWeight: 'bold' }}>
-        JACKPOT: $1,240,50.00
-      </div>
-    </div>
-    <div style={{ display: 'flex', justifyContent: 'space-between', margin: '20px 0' }}>
-      <div className="glass-card" style={{ flex: 1, marginRight: '10px', textAlign: 'center', padding: '10px' }}>
-        <div style={{ fontSize: '10px', color: 'var(--subtle)' }}>BET</div>
-        <div style={{ color: 'var(--gold)' }}>$10.00</div>
-      </div>
-      <div className="glass-card" style={{ flex: 1, textAlign: 'center', padding: '10px' }}>
-        <div style={{ fontSize: '10px', color: 'var(--subtle)' }}>WIN</div>
-        <div style={{ color: 'var(--foam)' }}>$0.00</div>
-      </div>
-    </div>
-    <button
-      className="premium-button"
-      style={{ width: '100%', height: '60px', fontSize: '20px' }}
-      onClick={() => playSound('win')}
-    >
-      SPIN
-    </button>
-  </div>
-);
+const SlotsScreen = ({ user, setUser }) => {
+  const [bet, setBet] = useState(10);
+  const [payout, setPayout] = useState(null);
+  const [spinning, setSpinning] = useState(false);
+  const [wheelRow, setWheelRow] = useState([]);
 
-const BlackjackScreen = () => (
-  <div className="screen-content">
-    <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Blackjack</h2>
-    <div className="glass-card" style={{ height: '400px', background: 'radial-gradient(circle, var(--pine) 0%, var(--surface) 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '40px 20px' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ color: 'var(--subtle)', marginBottom: '10px' }}>DEALER</div>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-          <div style={{ width: '50px', height: '70px', background: 'white', border: '2px solid var(--muted)' }}></div>
-          <div style={{ width: '50px', height: '70px', background: 'var(--overlay)' }}></div>
+  const symbolMap = {1: '💎', 2: '🍒', 3: '🔔', 4: '🍋', 5: '7️⃣'};
+
+  const handleSpin = async () => {
+    setSpinning(true);
+    // Deduct bet locally before sending request (functional update)
+    setUser(prev => ({ ...prev, balance: (prev.balance || 0) - bet }));
+    const formData = new FormData();
+    formData.append('username', user.username);
+    formData.append('password_hash', user.password_hash);
+    formData.append('bet', bet);
+    try {
+      const resp = await apiFetch(`${API_URL}/slots/play`, { method: 'POST', body: formData });
+      const data = await resp.json();
+      setPayout(data.payout);
+      setWheelRow(data.row || []);
+      // Add payout to balance if any (functional update)
+      if (data.payout) {
+        setUser(prev => ({ ...prev, balance: (prev.balance || 0) + data.payout }));
+      }
+    } catch (e) {
+      console.error('Spin failed', e);
+    }
+    setSpinning(false);
+    playSound('win');
+  };
+
+  return (
+    <div className="screen-content">
+      <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Slots</h2>
+      <div className="glass-card" style={{ height: '300px', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '2px solid var(--rose)', position: 'relative' }}>
+         <div style={{ display: 'flex', gap: '10px', fontSize: '50px', transform: spinning ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s' }}>
+           {(wheelRow.length ? wheelRow : [null, null, null]).map((num, i) => (
+             <div key={i} className="glass-card" style={{ padding: '10px', width: '80px', height: '120px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+               {num ? symbolMap[num] : ''}
+             </div>
+           ))}
+         </div>
+        <div style={{ position: 'absolute', bottom: '10px', width: '100%', textAlign: 'center', color: 'var(--foam)', fontWeight: 'bold' }}>
+          JACKPOT: $1,240,50.00
         </div>
       </div>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '10px' }}>
-          <div className="glass-card" style={{ width: '50px', height: '70px', background: 'white', color: 'black', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold' }}>A♠</div>
-          <div className="glass-card" style={{ width: '50px', height: '70px', background: 'white', color: 'black', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold' }}>K♥</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', margin: '20px 0' }}>
+        <div className="glass-card" style={{ flex: 1, marginRight: '10px', textAlign: 'center', padding: '10px' }}>
+          <div style={{ fontSize: '10px', color: 'var(--subtle)' }}>BET</div>
+          <input type="number" value={bet} onChange={e => setBet(parseInt(e.target.value) || 0)} style={{ width: '100%', textAlign: 'center', background: 'var(--overlay)', border: '1px solid var(--glass-border)', color: 'var(--text)', padding: '5px' }} />
         </div>
-        <div>YOUR HAND: 21</div>
+        <div className="glass-card" style={{ flex: 1, textAlign: 'center', padding: '10px' }}>
+          <div style={{ fontSize: '10px', color: 'var(--subtle)' }}>WIN</div>
+          <div style={{ color: 'var(--foam)' }}>${payout !== null ? payout : 0}</div>
+        </div>
       </div>
-    </div>
-    <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
       <button
-        style={{ flex: 1, padding: '15px', borderRadius: '12px', background: 'var(--overlay)', color: 'var(--text)', border: '1px solid var(--muted)', fontWeight: 'bold' }}
-        onClick={() => playSound('click')}
+        className="premium-button"
+        style={{ width: '100%', height: '60px', fontSize: '20px' }}
+        onClick={handleSpin}
+        disabled={spinning}
       >
-        HIT
-      </button>
-      <button
-        style={{ flex: 1, padding: '15px', borderRadius: '12px', background: 'var(--love)', color: 'var(--base)', border: 'none', fontWeight: 'bold' }}
-        onClick={() => playSound('click')}
-      >
-        STAND
+        {spinning ? 'Spinning...' : 'SPIN'}
       </button>
     </div>
-  </div>
-);
+  );
+};
+
+const BlackjackScreen = ({ user, setUser }) => {
+  const [bet, setBet] = useState(10);
+  const [gameId, setGameId] = useState(null);
+  const [playerCards, setPlayerCards] = useState([]);
+  const [dealerCards, setDealerCards] = useState([]);
+  const [gameState, setGameState] = useState('idle'); // idle, active, won, lost, draw
+  const [payout, setPayout] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const startGame = async () => {
+    setLoading(true);
+    const formData = new FormData();
+    formData.append('username', user.username);
+    formData.append('password_hash', user.password_hash);
+    formData.append('bet', bet);
+    try {
+      const resp = await apiFetch(`${API_URL}/blackjack/new_game`, { method: 'POST', body: formData });
+      const data = await resp.json();
+      setGameId(data.game_id);
+      // Deduct bet locally after successful start
+      setUser(prev => ({ ...prev, balance: (prev.balance || 0) - bet }));
+      // initial deal
+      await loop('');
+    } catch (e) {
+      console.error('Failed to start blackjack', e);
+    }
+    setLoading(false);
+  };
+
+  const loop = async (action) => {
+    if (!gameId) return;
+    const formData = new FormData();
+    formData.append('game_id', gameId);
+    formData.append('bet', bet);
+    formData.append('username', user.username);
+    formData.append('password_hash', user.password_hash);
+    if (action) formData.append('action', action);
+    try {
+      const resp = await apiFetch(`${API_URL}/blackjack/loop`, { method: 'POST', body: formData });
+      const data = await resp.json();
+      if (Array.isArray(data)) {
+        setPlayerCards(data);
+        setGameState('active');
+      } else if (data.game_state) {
+        setGameState(data.game_state);
+        setPayout(data.returned_money);
+        setPlayerCards(data.player_cards || []);
+        setDealerCards(data.dealer_cards || []);
+        if (data.returned_money) {
+          setUser(prev => ({ ...prev, balance: (prev.balance || 0) + data.returned_money }));
+        }
+      }
+    } catch (e) {
+      console.error('Blackjack loop error', e);
+    }
+  };
+
+  useEffect(() => {
+    if (gameId && gameState === 'idle') {
+      // fetch initial cards after game created
+      loop('');
+    }
+  }, [gameId]);
+
+  const handleHit = async () => {
+    await loop('hit');
+    playSound('click');
+  };
+  const handleStand = async () => {
+    await loop('stand');
+    playSound('click');
+  };
+
+  const renderCards = (cards) => (
+    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+      {cards.map((c, i) => (
+        <div key={i} className="glass-card" style={{ width: '50px', height: '70px', background: 'white', color: 'black', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>{c}</div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="screen-content">
+      <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Blackjack</h2>
+      {gameState === 'idle' && (
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ fontSize: '10px', color: 'var(--subtle)' }}>BET</div>
+          <input type="number" value={bet} onChange={e => setBet(parseInt(e.target.value) || 0)} style={{ width: '100%', textAlign: 'center', background: 'var(--overlay)', border: '1px solid var(--glass-border)', color: 'var(--text)', padding: '5px' }} />
+          <button className="premium-button" style={{ marginTop: '10px', width: '100%' }} onClick={startGame} disabled={loading}>
+            {loading ? 'Starting...' : 'Start Game'}
+          </button>
+        </div>
+      )}
+      {gameId && (
+        <> 
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ color: 'var(--subtle)', marginBottom: '10px' }}>DEALER</div>
+            {renderCards(gameState === 'active' ? [] : dealerCards)}
+          </div>
+          <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <div style={{ marginBottom: '10px' }}>YOUR HAND</div>
+            {renderCards(playerCards)}
+          </div>
+          {gameState === 'active' && (
+            <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+              <button style={{ flex: 1, padding: '15px', borderRadius: '12px', background: 'var(--overlay)', color: 'var(--text)', border: '1px solid var(--muted)', fontWeight: 'bold' }} onClick={handleHit}>HIT</button>
+              <button style={{ flex: 1, padding: '15px', borderRadius: '12px', background: 'var(--love)', color: 'var(--base)', border: 'none', fontWeight: 'bold' }} onClick={handleStand}>STAND</button>
+            </div>
+          )}
+          {gameState !== 'idle' && (
+          <div style={{ marginTop: '20px', textAlign: 'center' }}>
+            <h3>{gameState.toUpperCase()}</h3>
+            <p>Payout: ${payout}</p>
+            {gameState === 'won' && (
+              <button className="premium-button" style={{ marginTop: '10px' }} onClick={() => {
+                // Reset game state for a new round
+                setGameId(null);
+                setPlayerCards([]);
+                setDealerCards([]);
+                setGameState('idle');
+                setPayout(0);
+              }}>
+                PLAY AGAIN
+              </button>
+            )}
+          </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
 
 const SettingRow = ({ label, value, onClick }) => (
   <div
@@ -888,8 +1021,8 @@ function App() {
   const renderScreen = () => {
     switch (activeTab) {
       case 'home': return <HomeScreen userData={{ firstName: user.username, balance: `$${user.balance?.toFixed(2) || '0.00'}` }} setActiveTab={setActiveTab} onClaimBonus={handleClaimBonus} />;
-      case 'slots': return <SlotsScreen />;
-      case 'blackjack': return <BlackjackScreen />;
+      case 'slots': return <SlotsScreen user={user} setUser={setUser} />;
+      case 'blackjack': return <BlackjackScreen user={user} setUser={setUser} />;
       case 'account': return (
         <AccountScreen
           theme={theme}
