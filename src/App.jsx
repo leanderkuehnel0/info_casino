@@ -4,7 +4,7 @@ const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 // Sound control flag
 let soundsEnabled = true;
 
-const API_URL = 'http://sloth-allowed-uniformly.ngrok-free.app';
+const API_URL = 'http://127.0.0.1:5000';
 
 const apiFetch = (url, options = {}) => {
   const headers = {
