@@ -13,6 +13,7 @@ def init_db():
                 billing_address TEXT NOT NULL,
                 balance REAL DEFAULT 0.0,
                 totp_secret TEXT,
+                last_bonus_claim TEXT DEFAULT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')

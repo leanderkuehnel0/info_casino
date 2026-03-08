@@ -101,9 +101,10 @@ const HomeScreen = ({ userData, setActiveTab, onClaimBonus }) => (
       </div>
     </div>
 
+    {userData.lastBonusClaim !== new Date().toISOString().slice(0, 10) && (
     <div className="glass-card" style={{ background: 'linear-gradient(45deg, var(--overlay), var(--surface))', marginBottom: '24px' }}>
       <h2 style={{ marginBottom: '8px' }}>Daily Bonus</h2>
-      <p style={{ color: 'var(--text)', opacity: 1, fontSize: '14px', fontWeight: '500' }}>Claim your $0.50 chips now!</p>
+      <p style={{ color: 'var(--text)', opacity: 1, fontSize: '14px', fontWeight: '500' }}>Claim your $5 chips now!</p>
       <button
         className="premium-button"
         style={{ marginTop: '16px', width: '100%' }}
@@ -115,6 +116,7 @@ const HomeScreen = ({ userData, setActiveTab, onClaimBonus }) => (
         CLAIM NOW
       </button>
     </div>
+    )}
 
     <h3 style={{ margin: '16px 0', fontSize: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       Popular Games
@@ -145,47 +147,133 @@ const SlotsScreen = ({ user, setUser }) => {
   const [bet, setBet] = useState(10);
   const [payout, setPayout] = useState(null);
   const [spinning, setSpinning] = useState(false);
-  const [wheelRow, setWheelRow] = useState([]);
+  const [wheelRow, setWheelRow] = useState([5, 5, 5]);
+  const [hasLanded, setHasLanded] = useState(true);
 
-  const symbolMap = {1: '💎', 2: '🍒', 3: '🔔', 4: '🍋', 5: '7️⃣'};
+  const symbolMap = { 1: '💎', 2: '🍒', 3: '🔔', 4: '🍋', 5: '7️⃣' };
+  const symbolList = ['💎', '🍒', '🔔', '🍋', '7️⃣'];
+
+  // Add CSS keyframes for vertical spinning
+  useEffect(() => {
+    const styleId = 'slots-animation-style';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.innerHTML = `
+        @keyframes slotSpin {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(-700%); }
+        }
+        .slot-column {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .slot-column.spinning {
+          animation: slotSpin 0.3s linear infinite;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    return () => {
+      const styleElement = document.getElementById(styleId);
+      if (styleElement) {
+        styleElement.remove();
+      }
+    };
+  }, []);
+
+  const SlotReel = ({ result, isSpinning, index }) => {
+    // Repeated symbols to create the infinite scroll effect
+    const displaySymbols = [...symbolList, ...symbolList, ...symbolList, result ? symbolMap[result] : '❓'];
+    return (
+      <div className="glass-card" style={{ padding: 0, width: '80px', height: '120px', overflow: 'hidden', display: 'flex', justifyContent: 'center', backgroundColor: 'transparent' }}>
+        <div className={`slot-column ${isSpinning ? 'spinning' : ''}`} style={{ marginTop: (!isSpinning && hasLanded) ? '0' : (isSpinning ? '0' : 'calc(-120px * 15)'), transition: isSpinning ? 'none' : 'margin-top 0.1s ease-out' }}>
+          {!isSpinning && hasLanded ? (
+            <div style={{ height: '120px', display: 'flex', alignItems: 'center', fontSize: '50px', textShadow: '0 0 10px rgba(255,255,255,0.3)' }}>
+              {result ? symbolMap[result] : '❓'}
+            </div>
+          ) : (
+            displaySymbols.map((sym, i) => (
+              <div key={i} style={{ height: '120px', display: 'flex', alignItems: 'center', fontSize: '50px', textShadow: '0 0 10px rgba(255,255,255,0.3)' }}>
+                {sym}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const handleSpin = async () => {
+    if (bet <= 0) {
+      alert("Bet must be greater than zero.");
+      return;
+    }
+    if (user.balance < bet) {
+      alert("Insufficient balance.");
+      return;
+    }
+
     setSpinning(true);
-    // Deduct bet locally before sending request (functional update)
+    setHasLanded(false);
     setUser(prev => ({ ...prev, balance: (prev.balance || 0) - bet }));
+
     const formData = new FormData();
     formData.append('username', user.username);
     formData.append('password_hash', user.password_hash);
     formData.append('bet', bet);
+
     try {
       const resp = await apiFetch(`${API_URL}/slots/play`, { method: 'POST', body: formData });
-      const data = await resp.json();
-      setPayout(data.payout);
-      setWheelRow(data.row || []);
-      // Add payout to balance if any (functional update)
-      if (data.payout) {
-        setUser(prev => ({ ...prev, balance: (prev.balance || 0) + data.payout }));
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        alert(errorText);
+        // Restore balance on failure
+        setUser(prev => ({ ...prev, balance: (prev.balance || 0) + bet }));
+        setSpinning(false);
+        setWheelRow([5, 5, 5]);
+        setHasLanded(true);
+        return;
       }
+
+      const data = await resp.json();
+
+      // Keep spinning for 1.5 seconds minimum for visual effect
+      setTimeout(() => {
+        setPayout(data.payout);
+        setWheelRow(data.row || [5, 5, 5]);
+        setSpinning(false);
+        setHasLanded(true);
+        if (data.payout) {
+          setUser(prev => ({ ...prev, balance: (prev.balance || 0) + data.payout }));
+          playSound('win');
+        } else {
+          playSound('click'); // simple tick on loss
+        }
+      }, 1500);
+
     } catch (e) {
       console.error('Spin failed', e);
+      // Restore balance on error
+      setUser(prev => ({ ...prev, balance: (prev.balance || 0) + bet }));
+      setSpinning(false);
+      setHasLanded(true);
     }
-    setSpinning(false);
-    playSound('win');
   };
 
   return (
     <div className="screen-content">
       <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Slots</h2>
-      <div className="glass-card" style={{ height: '300px', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '2px solid var(--rose)', position: 'relative' }}>
-         <div style={{ display: 'flex', gap: '10px', fontSize: '50px', transform: spinning ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s' }}>
-           {(wheelRow.length ? wheelRow : [null, null, null]).map((num, i) => (
-             <div key={i} className="glass-card" style={{ padding: '10px', width: '80px', height: '120px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-               {num ? symbolMap[num] : ''}
-             </div>
-           ))}
-         </div>
+      <div className="glass-card" style={{ height: '300px', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '2px solid var(--rose)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {[0, 1, 2].map((i) => (
+            <SlotReel key={i} index={i} result={wheelRow[i]} isSpinning={spinning} />
+          ))}
+        </div>
         <div style={{ position: 'absolute', bottom: '10px', width: '100%', textAlign: 'center', color: 'var(--foam)', fontWeight: 'bold' }}>
-          JACKPOT: $1,240,50.00
+          JACKPOT: $1,240,500.00
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', margin: '20px 0' }}>
@@ -220,6 +308,8 @@ const BlackjackScreen = ({ user, setUser }) => {
   const [loading, setLoading] = useState(false);
 
   const startGame = async () => {
+    if (bet <= 0) { alert('Bet must be greater than 0'); return; }
+    if (user.balance < bet) { alert('Insufficient balance'); return; }
     setLoading(true);
     const formData = new FormData();
     formData.append('username', user.username);
@@ -304,7 +394,7 @@ const BlackjackScreen = ({ user, setUser }) => {
         </div>
       )}
       {gameId && (
-        <> 
+        <>
           <div style={{ textAlign: 'center' }}>
             <div style={{ color: 'var(--subtle)', marginBottom: '10px' }}>DEALER</div>
             {renderCards(gameState === 'active' ? [] : dealerCards)}
@@ -320,22 +410,22 @@ const BlackjackScreen = ({ user, setUser }) => {
             </div>
           )}
           {gameState !== 'idle' && (
-          <div style={{ marginTop: '20px', textAlign: 'center' }}>
-            <h3>{gameState.toUpperCase()}</h3>
-            <p>Payout: ${payout}</p>
-            {gameState === 'won' && (
-              <button className="premium-button" style={{ marginTop: '10px' }} onClick={() => {
-                // Reset game state for a new round
-                setGameId(null);
-                setPlayerCards([]);
-                setDealerCards([]);
-                setGameState('idle');
-                setPayout(0);
-              }}>
-                PLAY AGAIN
-              </button>
-            )}
-          </div>
+            <div style={{ marginTop: '20px', textAlign: 'center' }}>
+              <h3>{gameState.toUpperCase()}</h3>
+              <p>Payout: ${payout}</p>
+              {gameState !== 'active' && (
+                <button className="premium-button" style={{ marginTop: '10px' }} onClick={() => {
+                  // Reset game state for a new round
+                  setGameId(null);
+                  setPlayerCards([]);
+                  setDealerCards([]);
+                  setGameState('idle');
+                  setPayout(0);
+                }}>
+                  PLAY AGAIN
+                </button>
+              )}
+            </div>
           )}
         </>
       )}
@@ -913,7 +1003,7 @@ function App() {
       const resp = await apiFetch(`${API_URL}/claim_bonus`, { method: 'POST', body: formData });
       if (resp.ok) {
         const data = await resp.json();
-        setUser({ ...user, balance: data.new_balance });
+        setUser({ ...user, balance: data.new_balance, last_bonus_claim: new Date().toISOString().slice(0, 10) });
       }
     } catch (err) {
       console.error('Bonus claim failed', err);
@@ -1020,7 +1110,7 @@ function App() {
 
   const renderScreen = () => {
     switch (activeTab) {
-      case 'home': return <HomeScreen userData={{ firstName: user.username, balance: `$${user.balance?.toFixed(2) || '0.00'}` }} setActiveTab={setActiveTab} onClaimBonus={handleClaimBonus} />;
+      case 'home': return <HomeScreen userData={{ firstName: user.username, balance: `$${user.balance?.toFixed(2) || '0.00'}`, lastBonusClaim: user.last_bonus_claim }} setActiveTab={setActiveTab} onClaimBonus={handleClaimBonus} />;
       case 'slots': return <SlotsScreen user={user} setUser={setUser} />;
       case 'blackjack': return <BlackjackScreen user={user} setUser={setUser} />;
       case 'account': return (

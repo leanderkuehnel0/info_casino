@@ -10,6 +10,17 @@ from flask_cors import CORS
 import random
 
 
+# Migrate: add last_bonus_claim column if missing
+def _migrate_db():
+    with sqlite3.connect("casino.db") as conn:
+        cur = conn.execute("PRAGMA table_info(users)")
+        columns = [row[1] for row in cur.fetchall()]
+        if "last_bonus_claim" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN last_bonus_claim TEXT DEFAULT NULL")
+
+_migrate_db()
+
+
 class Blackjack:
     # self.kartenself.werte
     def __init__(self):
@@ -417,9 +428,15 @@ def claim_bonus():
         user = cur.fetchone()
 
         if user:
-            new_balance = user["balance"] + 0.5
+            last_claim = user["last_bonus_claim"]
+            today = datetime.date.today().isoformat()
+            if last_claim == today:
+                return "You already claimed your daily bonus today!", 400
+
+            new_balance = user["balance"] + 5.0
             conn.execute(
-                "UPDATE users SET balance = ? WHERE id = ?", (new_balance, user["id"])
+                "UPDATE users SET balance = ?, last_bonus_claim = ? WHERE id = ?",
+                (new_balance, today, user["id"]),
             )
             return {"success": True, "new_balance": new_balance}, 200
         return "Unauthorized", 401
@@ -594,6 +611,9 @@ def play_slots():
 
     if not username or not password_hash:
         return "Username and password required", 400
+    
+    if bet <= 0:
+        return "Invalid bet amount", 400
 
     # Verify user and balance
     with sqlite3.connect("casino.db") as conn:
